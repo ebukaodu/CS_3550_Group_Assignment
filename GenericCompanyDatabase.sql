@@ -633,12 +633,33 @@ BEGIN
 	SET @EmployeeKey = (SELECT EmployeeKey from inserted)	
 	SET @HistDate = (SELECT Assigned FROM inserted)
 
-	UPDATE Computers
-	SET ComputerStatusKey = 1
-	WHERE ComputerKey = @CompKey
-
-	SET @OrigStatsKey = (SELECT ChangedComputerStatusKey FROM ComputerStatusHistory WHERE ComputerKey = @CompKey)
-
+	SET @OrigStatsKey = 
+		(SELECT 
+			CSH.ChangedComputerStatusKey
+		FROM 
+			(SELECT  
+				MAX(z.hist) [history],
+				z.ComputerKey
+			FROM 
+				(SELECT  
+					MAX(HistoryDate) [hist],
+					ComputerKey
+				FROM 
+					ComputerStatusHistory 
+				WHERE 
+					ComputerKey = @CompKey 
+				GROUP BY 
+					ComputerKey)z
+			WHERE 
+				z.ComputerKey = @CompKey 
+			GROUP BY 
+				z.hist,
+				z.ComputerKey)x
+		INNER JOIN ComputerStatusHistory CSH
+			ON x.ComputerKey = CSH.ComputerKey
+		WHERE CSH.ComputerKey = @CompKey AND
+		x.history = CSH.HistoryDate)
+ 
 	INSERT INTO ComputerStatusHistory (ComputerKey, EmployeeKey, OriginalComputerStatusKey, ChangedComputerStatusKey, HistoryDate)
 	VALUES (@CompKey, @EmployeeKey, @OrigStatsKey, 1, @HistDate)	
 END
