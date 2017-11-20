@@ -308,7 +308,9 @@ Last part, and to force you to do some testing...  Create the following executio
 */
 --------------------------------
 
---Add a new employee
+
+GO
+
 CREATE OR ALTER PROCEDURE sp_AddEmployee
 	@LastName varchar(25),
 	@FirstName varchar(25),
@@ -619,6 +621,8 @@ BEGIN
 	VALUES (@CompKey, NULL, NULL, 0, GETDATE())	
 END
 
+GO 
+
 CREATE TRIGGER tr_EmpComputersAfterInsert
 ON EmployeeComputers
 AFTER INSERT
@@ -643,7 +647,7 @@ BEGIN
 	VALUES (@CompKey, @EmployeeKey, @OrigStatsKey, 1, @HistDate)	
 END
 
-
+GO
 
 CREATE TRIGGER tr_ComputersAfterUpdate
 ON Computers
@@ -665,6 +669,8 @@ BEGIN
 	VALUES (@CompKey, @EmpKey, @OrigCompStatKey, @ChgCompStatKey, GETDATE())		
 END
 
+GO
+
 CREATE TRIGGER tr_EmpComputersAfterUpdate
 ON EmployeeComputers
 AFTER UPDATE
@@ -684,13 +690,13 @@ BEGIN
 	VALUES (@CompKey, @EmpKey, @OrigStatsKey, 1, GETDATE())		
 END
 
-
+GO
 --------------------------------
 /*
 	Views under here
 */
 --------------------------------
-CREATE OR ALTER VIEW vw_AvailableComputers
+CREATE VIEW AvailableComputers
 AS
 
 WITH MostRecentHistory AS
@@ -713,7 +719,7 @@ FROM Computers comps
 		AND hist.Recent = 1
 GO
 
-CREATE OR ALTER VIEW vw_ComputersInForRepair
+CREATE VIEW vw_ComputersInForRepair
 AS
 SELECT DISTINCT
 	E.LastName,
@@ -751,7 +757,9 @@ FROM
 		ON X.ComputerKey = CSH.ComputerKey		
 WHERE C.ComputerStatusKey = 4
 
-CREATE OR ALTER VIEW vw_LostOrStolenComputers
+GO
+
+CREATE OR ALTER VIEW LostOrStolenComputers
 -- View of all stolen/lost computers
 -- Also checks to make sure it gets the last known history of 
 -- a computer (in the event a computer is lost/stolen more than once).
@@ -805,7 +813,7 @@ GO
 	Functions under here
 */
 --------------------------------
-CREATE OR ALTER FUNCTION fc_ChangeUnit (
+CREATE FUNCTION ChangeUnit (
 	@inUnit varchar(2),
 	@inValue int,
 	@outUnit varchar(2)
@@ -815,24 +823,24 @@ AS
   BEGIN
 
 	DECLARE @returnValue int;
-	IF @inUnit = 'KB'
-		SET @returnValue = (@inValue / 1024
-	ELSE IF @inUnit = 'GB'
-		SET @returnValue = @inValue * 1024
-	ELSE IF @inUnit = 'TB'
-		SET @returnValue = @inValue * 1024 * 1024
 
-	IF @outUnit = 'KB'
+	IF @inUnit = 'MB'
+		SET @returnValue = @inValue / 1024
+	ELSE IF @inUnit = 'TB'
+		SET @returnValue = @inValue * 1024
+	
+	IF @outUnit = 'MB'
 		SET @returnValue = @returnValue * 1024
-	ELSE IF @outUnit = 'GB'
-		SET @returnValue = @returnValue / 1024
 	ELSE IF @outUnit = 'TB'
-		SET @returnValue = (@returnValue / 1024) / 1024
+		SET @returnValue = @returnValue / 1024
 
 	RETURN @returnValue;
 
   END
 GO
+
+
+
 
 --------------------------------
 /*
