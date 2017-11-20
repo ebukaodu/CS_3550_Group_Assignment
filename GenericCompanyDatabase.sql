@@ -633,33 +633,12 @@ BEGIN
 	SET @EmployeeKey = (SELECT EmployeeKey from inserted)	
 	SET @HistDate = (SELECT Assigned FROM inserted)
 
-	SET @OrigStatsKey = 
-		(SELECT 
-			CSH.ChangedComputerStatusKey
-		FROM 
-			(SELECT  
-				MAX(z.hist) [history],
-				z.ComputerKey
-			FROM 
-				(SELECT  
-					MAX(HistoryDate) [hist],
-					ComputerKey
-				FROM 
-					ComputerStatusHistory 
-				WHERE 
-					ComputerKey = @CompKey 
-				GROUP BY 
-					ComputerKey)z
-			WHERE 
-				z.ComputerKey = @CompKey 
-			GROUP BY 
-				z.hist,
-				z.ComputerKey)x
-		INNER JOIN ComputerStatusHistory CSH
-			ON x.ComputerKey = CSH.ComputerKey
-		WHERE CSH.ComputerKey = @CompKey AND
-		x.history = CSH.HistoryDate)
- 
+	UPDATE Computers
+	SET ComputerStatusKey = 1
+	WHERE ComputerKey = @CompKey
+
+	SET @OrigStatsKey = (SELECT ChangedComputerStatusKey FROM ComputerStatusHistory WHERE ComputerKey = @CompKey)
+
 	INSERT INTO ComputerStatusHistory (ComputerKey, EmployeeKey, OriginalComputerStatusKey, ChangedComputerStatusKey, HistoryDate)
 	VALUES (@CompKey, @EmployeeKey, @OrigStatsKey, 1, @HistDate)	
 END
@@ -711,7 +690,7 @@ END
 	Views under here
 */
 --------------------------------
-CREATE VIEW AvailableComputers
+CREATE OR ALTER VIEW vw_AvailableComputers
 AS
 
 WITH MostRecentHistory AS
@@ -734,7 +713,7 @@ FROM Computers comps
 		AND hist.Recent = 1
 GO
 
-CREATE VIEW vw_ComputersInForRepair
+CREATE OR ALTER VIEW vw_ComputersInForRepair
 AS
 SELECT DISTINCT
 	E.LastName,
@@ -772,7 +751,7 @@ FROM
 		ON X.ComputerKey = CSH.ComputerKey		
 WHERE C.ComputerStatusKey = 4
 
-CREATE OR ALTER VIEW LostOrStolenComputers
+CREATE OR ALTER VIEW vw_LostOrStolenComputers
 -- View of all stolen/lost computers
 -- Also checks to make sure it gets the last known history of 
 -- a computer (in the event a computer is lost/stolen more than once).
@@ -826,7 +805,7 @@ GO
 	Functions under here
 */
 --------------------------------
-CREATE FUNCTION ChangeUnit (
+CREATE OR ALTER FUNCTION fc_ChangeUnit (
 	@inUnit varchar(2),
 	@inValue int,
 	@outUnit varchar(2)
@@ -836,16 +815,19 @@ AS
   BEGIN
 
 	DECLARE @returnValue int;
-
-	IF @inUnit = 'MB'
-		SET @returnValue = @inValue / 1024
-	ELSE IF @inUnit = 'TB'
+	IF @inUnit = 'KB'
+		SET @returnValue = (@inValue / 1024
+	ELSE IF @inUnit = 'GB'
 		SET @returnValue = @inValue * 1024
-	
-	IF @outUnit = 'MB'
+	ELSE IF @inUnit = 'TB'
+		SET @returnValue = @inValue * 1024 * 1024
+
+	IF @outUnit = 'KB'
 		SET @returnValue = @returnValue * 1024
-	ELSE IF @outUnit = 'TB'
+	ELSE IF @outUnit = 'GB'
 		SET @returnValue = @returnValue / 1024
+	ELSE IF @outUnit = 'TB'
+		SET @returnValue = (@returnValue / 1024) / 1024
 
 	RETURN @returnValue;
 
@@ -863,24 +845,81 @@ sp_CreateDepartment 'Business Intelligence'
 
 -- Add two valid employee, both part of Business Intelligence
 
+EXECUTE sp_AddEmployee
+	@LastName  = "Tyler",
+	@FirstName = "Hoyer,
+	@Email = "TylerRichardHoyer@gmail.com",
+	@Hired "11/20/2017",
+	@DepartmentKey = 5,
+	@SupervisorEmployeeKey = 1,
+	@isOwnSupervisor = 0
+GO
+
+EXECUTE sp_AddEmployee
+	@LastName  = "Yo",
+	@FirstName = "Daddy,
+	@Email = "YoDaddy@gmail.com",
+	@Hired "11/20/2017",
+	@DepartmentKey = 5,
+	@SupervisorEmployeeKey = 1,
+	@isOwnSupervisor = 0
+GO
 
 -- Try to add an employee, passing in a department that doesn't exist
+EXECUTE sp_AddEmployee
+	@LastName  = "Hax",
+	@FirstName = "Haxity,
+	@Email = "NoGood@gmail.com",
+	@Hired "11/20/2017",
+	@DepartmentKey = 666,
+	@SupervisorEmployeeKey = 1,
+	@isOwnSupervisor = 0
+GO
 
+-- Terminate employee #3 (Major Geek)
+EXECUTE sp_TerminateEmployee
+	@EmployeeKey = 3,	
+	@Terminated = "11/19/2017"
+GO
 
 -- Try to add an employee, passing in a supervisor that is no longer active (what should this do?)
-
+EXECUTE sp_AddEmployee
+	@LastName  = "Hax",
+	@FirstName = "Haxity,
+	@Email = "NoGood@gmail.com",
+	@Hired "11/10/2017",
+	@DepartmentKey = 1
+	@SupervisorEmployeeKey = 3,
+	@isOwnSupervisor = 0
+GO
 
 -- Update an employees department to 'Human Resources'
-
+EXECUTE sp_EditEmployeeDepartment
+	@EmployeeKey = 4,
+	@DepartmentKey = 2,
+	@SupervisorEmployeeKey = 1,
+	@isOwnSupervisor = 0	
 
 -- Try to update an employees department to 'Moon Staff' (assuming that 'Moon Staff' doesn't exist in your database).  
-
+EXECUTE sp_EditEmployeeDepartment
+	@EmployeeKey = 4,
+	@DepartmentKey = 666,
+	@SupervisorEmployeeKey = 1,
+	@isOwnSupervisor = 0
 
 -- Update an employees supervisor to an active employee
-
+EXECUTE sp_EditEmployeeDepartment
+	@EmployeeKey = 4,
+	@DepartmentKey = 2,
+	@SupervisorEmployeeKey = 0,
+	@isOwnSupervisor = 1
 
 -- Try updating an employees supervisor to an inactive employee.  Should this work?
-
+EXECUTE sp_EditEmployeeDepartment
+	@EmployeeKey = 4,
+	@DepartmentKey = 2,
+	@SupervisorEmployeeKey = 3,
+	@isOwnSupervisor = 0
 
 -- Create a new Mac Book pro laptop for Major Geek.  Use whatever specs you can find off the Apple web page.  Make sure the laptop gets assigned to Major Geek
 	DECLARE @NewComputerKey INT
@@ -901,8 +940,6 @@ sp_CreateDepartment 'Business Intelligence'
 		@ComputerKey = @NewComputerKey,
 		@EmployeeKey = 3 -- Major Geek's key
 	GO
-
--- Terminate employee #3 (Major Geek)
 
 
 -- Execute the stored procedure that shows the computer history, passing in the computer key for the new laptop you created for Major Geek (tricky).  Does it show available now?
